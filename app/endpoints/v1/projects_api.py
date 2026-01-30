@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
+from sqlalchemy.exc import IntegrityError
+
 from app.database.session import get_db
 from app.models import Project, UserStory, User, Team
 from app.schemas import ProjectResponse
@@ -10,7 +12,7 @@ from app.auth.dependencies import get_current_user
 from app.constants import ErrorMessages, SuccessMessages
 from app.constants import ADMIN, DEVELOPER
 from app.utils.common import get_object_or_404
-from app.exceptions import raise_forbidden, raise_not_found
+from app.exceptions import raise_forbidden, raise_not_found, raise_bad_request
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,18 +35,21 @@ def create_project(
     if user.view_mode != ADMIN:
         raise_forbidden("Developers cannot create projects. Please switch to Admin Mode.")
 
-    # Any user in ADMIN mode can create projects
-    project = Project(
-        name=name,
-        project_prefix=project_prefix.upper(),
-        owner_id=user.id
-    )
-    if project.current_story_number is None:
-            project.current_story_number = 1
-    db.add(project)
-    # db.commit() handled by dependency
-    db.flush() # ensure ID is generated if needed, though refresh covers it? refresh needs flush if autocommit=False.
-    db.refresh(project)
+    try:
+        # Any user in ADMIN mode can create projects
+        project = Project(
+            name=name,
+            project_prefix=project_prefix.upper(),
+            owner_id=user.id
+        )
+        if project.current_story_number is None:
+                project.current_story_number = 1
+        db.add(project)
+        # db.commit() handled by dependency
+        db.flush() # ensure ID is generated if needed, though refresh covers it? refresh needs flush if autocommit=False.
+        db.refresh(project)
+    except IntegrityError:
+        raise_bad_request("Project with this name already exists")
 
     return project
 

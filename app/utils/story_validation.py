@@ -60,3 +60,13 @@ def validate_status_transition(story: UserStory, new_status: str):
          ]
          if pending_children:
              raise_bad_request(f"Cannot mark as Done: Child issues are not Done ({len(pending_children)} pending).")
+
+def validate_dates(start_date, end_date):
+    """
+    Validates that end_date is not earlier than start_date.
+    Accepts date objects or None.
+    """
+    if start_date and end_date:
+        if end_date < start_date:
+            raise_bad_request("End date cannot be earlier than start date.")
+

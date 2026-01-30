@@ -26,7 +26,7 @@ from app.utils.story_repo import (
     get_assigned_stories_db,
     get_stories_by_project_db
 )
-from app.utils.story_validation import validate_hierarchy, validate_status_transition
+from app.utils.story_validation import validate_hierarchy, validate_status_transition, validate_dates
 
 def create_activity(db: Session, story_id: int, user_id: Optional[int], action: str, changes_dict: dict):
     from app.models import UserStoryActivity
@@ -108,6 +108,7 @@ def create_story(db: Session, user: User, story_in: Any, file_path: Optional[str
         raise_forbidden(msg)
 
     validate_hierarchy(db, story_in.parent_issue_id, story_in.issue_type)
+    validate_dates(story_in.start_date, story_in.end_date)
     
     try:
         story_code = get_next_story_code(db, project_id)
@@ -172,6 +173,11 @@ def update_story(db: Session, user: User, story_id: int, story_in: Any) -> UserS
     if 'status' in updates and updates['status'] != story.status:
         validate_status_transition(story, updates['status'])
         
+    # [NEW] Validate dates if either changed
+    final_start = updates.get('start_date', story.start_date)
+    final_end = updates.get('end_date', story.end_date)
+    validate_dates(final_start, final_end)
+
     for field, new_val in updates.items():
         if field == "parent_issue_id" and field in changes: 
              setattr(story, field, new_val)
