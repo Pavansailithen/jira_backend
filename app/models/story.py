@@ -28,6 +28,7 @@ class UserStory(Base):
     )
 
     team_id = Column(Integer, ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
+    epic_id = Column(Integer, ForeignKey("epics.id", ondelete="SET NULL"), nullable=True) # Linked Epic
 
     assignee = Column(String(100), nullable=False)
     reviewer = Column(String(100), nullable=True)
@@ -49,6 +50,7 @@ class UserStory(Base):
     project = relationship("Project", back_populates="stories")
     assignee_user = relationship("User", foreign_keys=[assignee_id])
     team = relationship("Team", back_populates="stories")
+    epic = relationship("Epic", back_populates="stories")
     activities = relationship("UserStoryActivity", back_populates="story", cascade="all, delete-orphan")
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True) # key for RBAC ownership

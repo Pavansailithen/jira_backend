@@ -25,4 +25,5 @@ class Project(Base):
     updated_at = Column(DateTime, onupdate=func.now())
 
     teams = relationship("Team", back_populates="project", cascade="all, delete-orphan")
+    epics = relationship("Epic", back_populates="project", cascade="all, delete-orphan")
 

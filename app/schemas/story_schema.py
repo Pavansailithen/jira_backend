@@ -53,6 +53,7 @@ class UserStoryResponse(BaseModel):
     start_date: Optional[date]
     end_date: Optional[date]
     parent_issue_id: Optional[int] = None
+    epic_id: Optional[int] = None
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -94,6 +95,7 @@ class UserStoryCreateRequest(BaseModel):
     end_date: Optional[date] = None
     team_id: Optional[int] = None
     parent_issue_id: Optional[int] = None
+    epic_id: Optional[int] = None
 
 class UserStoryUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -130,6 +132,7 @@ class UserStoryCreateForm:
         end_date: Optional[date] = Form(None),
         team_id: Optional[str] = Form(None),
         parent_issue_id: Optional[str] = Form(None),
+        epic_id: Optional[str] = Form(None),
     ):
         self.project_id = project_id
         self.release_number = release_number
@@ -148,6 +151,7 @@ class UserStoryCreateForm:
         self.end_date = end_date
         self.team_id = team_id
         self.parent_issue_id = parent_issue_id
+        self.epic_id = epic_id
 
     def to_create_request(self) -> "UserStoryCreateRequest":
         def parse_optional_int(val):
@@ -159,6 +163,7 @@ class UserStoryCreateForm:
         p_assignee_id = parse_optional_int(self.assigned_to) if self.assigned_to is not None else parse_optional_int(self.assignee_id)
         p_team_id = parse_optional_int(self.team_id)
         p_parent_id = parse_optional_int(self.parent_issue_id)
+        p_epic_id = parse_optional_int(self.epic_id)
         
         return UserStoryCreateRequest(
             project_id=self.project_id,
@@ -175,7 +180,8 @@ class UserStoryCreateForm:
             start_date=self.start_date,
             end_date=self.end_date,
             team_id=p_team_id,
-            parent_issue_id=p_parent_id
+            parent_issue_id=p_parent_id,
+            epic_id=p_epic_id
         )
 
 class UserStoryUpdateForm:
@@ -262,6 +268,7 @@ class StoryRepoCreate(BaseModel):
     end_date: Optional[date] = None
     team_id: Optional[int] = None
     parent_issue_id: Optional[int] = None
+    epic_id: Optional[int] = None
     created_by: int
 
     @classmethod
@@ -294,5 +301,6 @@ class StoryRepoCreate(BaseModel):
             end_date=story_in.end_date,
             team_id=team_id,
             parent_issue_id=story_in.parent_issue_id,
+            epic_id=story_in.epic_id,
             created_by=user_id
         )

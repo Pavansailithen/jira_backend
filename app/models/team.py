@@ -31,3 +31,4 @@ class Team(Base):
     lead = relationship("User", back_populates="led_teams")
     members = relationship("User", secondary=team_members, back_populates="teams")
     stories = relationship("UserStory", back_populates="team")
+    epics = relationship("Epic", secondary="epic_teams", back_populates="teams")
