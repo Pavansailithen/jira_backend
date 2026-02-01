@@ -110,6 +110,7 @@ class UserStoryUpdateRequest(BaseModel):
     end_date: Optional[datetime] = None
     priority: Optional[str] = None
     issue_type: Optional[str] = None
+    epic_id: Optional[int] = None
 
     
 class UserStoryCreateForm:
@@ -199,6 +200,7 @@ class UserStoryUpdateForm:
         end_date: Optional[str] = Form(None),
         priority: Optional[str] = Form(None),
         issue_type: Optional[str] = Form(None),
+        epic_id: Optional[str] = Form(None),
     ):
         self.title = title
         self.description = description
@@ -212,6 +214,7 @@ class UserStoryUpdateForm:
         self.end_date = end_date
         self.priority = priority
         self.issue_type = issue_type
+        self.epic_id = epic_id
 
     def to_update_request(self) -> "UserStoryUpdateRequest":
         def clean_str(val):
@@ -239,6 +242,7 @@ class UserStoryUpdateForm:
         if self.parent_issue_id is not None: updates['parent_issue_id'] = clean_int(self.parent_issue_id)
         if self.priority is not None: updates['priority'] = self.priority
         if self.issue_type is not None: updates['issue_type'] = self.issue_type
+        if self.epic_id is not None: updates['epic_id'] = clean_int(self.epic_id)
         
         if self.start_date is not None:
              dval = parse_date_str(self.start_date)
