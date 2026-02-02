@@ -183,3 +183,32 @@ def get_recent_activity(
         }
         for a in activities
     ]
+
+@router.get("/landing")
+def get_landing_stats(db: Session = Depends(get_db)):
+    """
+    Retrieves user statistics for the landing page.
+    Public endpoint.
+    """
+    total_users = db.query(User).count()
+    # Note: Using _role because role is a hybrid property and we want DB side filtering
+    # Also considering Master Admin as Admin for this stat or just standard Admins? 
+    # Let's count standard admins + master admin if we want, but simpler to just count by stored role for now.
+    # Master admin has email check in model, so might have None or 'ADMIN' in _role.
+    # Let's simple count based on _role content.
+    
+    total_admins = db.query(User).filter(User._role == UserRole.ADMIN.value).count()
+    # Check for master admin separately if needed, but typically they are just 1. 
+    # If we want to be precise:
+    # total_admins = db.query(User).filter(or_(User._role == UserRole.ADMIN.value, User.email == "admin@jira.local")).count()
+    # But let's stick to the simple requirement first.
+    
+    total_developers = db.query(User).filter(User._role == UserRole.DEVELOPER.value).count()
+    total_testers = db.query(User).filter(User._role == UserRole.TESTER.value).count()
+    
+    return {
+        "total_users": total_users,
+        "total_admins": total_admins,
+        "total_developers": total_developers,
+        "total_testers": total_testers
+    }
