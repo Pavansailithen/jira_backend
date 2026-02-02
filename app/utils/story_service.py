@@ -30,6 +30,7 @@ from app.utils.story_validation import validate_hierarchy, validate_status_trans
 
 def create_activity(db: Session, story_id: int, user_id: Optional[int], action: str, changes_dict: dict):
     from app.models import UserStoryActivity
+    import json
     if not changes_dict and action == StoryAction.UPDATED.value:
         return
 
@@ -37,8 +38,13 @@ def create_activity(db: Session, story_id: int, user_id: Optional[int], action: 
     if action == StoryAction.CREATED.value:
         change_lines.append("Issue Created")
     
+    # [FIX] Handle dictionary serialization for consistency with model expectations
+    # if changes is Text column, we want a string.
     for field, vals in changes_dict.items():
-        change_lines.append(f"{field}: {vals['old']} → {vals['new']}")
+        if isinstance(vals, dict) and "old" in vals and "new" in vals:
+            change_lines.append(f"{field}: {vals['old']} → {vals['new']}")
+        else:
+            change_lines.append(f"{field}: {vals}")
         
     changes_text = "\\n".join(change_lines)
     
@@ -50,6 +56,7 @@ def create_activity(db: Session, story_id: int, user_id: Optional[int], action: 
         change_count=len(changes_dict)
     )
     db.add(activity)
+    db.flush() # Ensure it's sent to DB
 
 # Re-exports or wrappers
 def get_story_by_id(db: Session, story_id: int) -> Optional[UserStory]:
@@ -57,6 +64,81 @@ def get_story_by_id(db: Session, story_id: int) -> Optional[UserStory]:
 
 def get_user_story_activities(db: Session, story_id: int) -> List[Any]:
     return get_user_story_activities_db(db, story_id)
+
+def _handle_sprint_auto_assignment(db: Session, project_id: int, target_end_date: Any, current_story_id: Optional[int], target_sprint_number: Optional[str], user_id: int) -> Optional[str]:
+    """
+    Ensures Date and Sprint are synchronized.
+    Priority:
+    1. If end_date is provided, find/create a sprint for that date.
+    2. If only sprint_number is provided, find the date for that sprint.
+    """
+    # Case 1: End Date is provided (or existing)
+    if target_end_date:
+        # Check if any OTHER story in this project already has THIS end_date and a sprint number
+        existing = db.query(UserStory.sprint_number).filter(
+            UserStory.project_id == project_id,
+            UserStory.end_date == target_end_date,
+            UserStory.sprint_number.isnot(None),
+            UserStory.sprint_number != 'Backlog'
+        ).first()
+
+        if existing:
+            return existing[0]
+
+        # No sprint for this date. Generate a new one.
+        all_sprints = db.query(UserStory.sprint_number).filter(
+            UserStory.project_id == project_id,
+            UserStory.sprint_number.isnot(None),
+            UserStory.sprint_number != 'Backlog'
+        ).distinct().all()
+        
+        sprint_nums = []
+        for (snum,) in all_sprints:
+            try: sprint_nums.append(int(snum))
+            except: continue
+        
+        next_num = max(sprint_nums) + 1 if sprint_nums else 1
+        new_sprint = f"{next_num:02d}"
+
+        # Backfill: Move any other backlog stories with this date to the new sprint
+        others = db.query(UserStory).filter(
+            UserStory.project_id == project_id,
+            UserStory.end_date == target_end_date,
+            (UserStory.sprint_number.is_(None) | (UserStory.sprint_number == 'Backlog'))
+        ).all()
+        
+        for s in others:
+            if current_story_id and s.id == current_story_id: continue
+            old_s = s.sprint_number
+            s.sprint_number = new_sprint
+            db.add(s)
+            create_activity(db, s.id, user_id, StoryAction.UPDATED.value, {
+                "sprint_number": {"old": str(old_s), "new": new_sprint},
+                "note": {"old": "", "new": f"Auto-assigned to sprint due to shared end date {target_end_date}"}
+            })
+        
+        return new_sprint
+
+    # Case 2: No end_date, but sprint_number is provided (manual move)
+    if target_sprint_number and target_sprint_number != 'Backlog':
+        # Find if this sprint already has a date associated with it
+        existing_date = db.query(UserStory.end_date).filter(
+            UserStory.project_id == project_id,
+            UserStory.sprint_number == target_sprint_number,
+            UserStory.end_date.isnot(None)
+        ).first()
+        
+        if existing_date:
+            # We don't return the date here, but we should probably update the current story's date.
+            # However, this function returns a SPRINT. 
+            # To sync the date, we might need a different approach or update the story object directly.
+            return target_sprint_number
+
+    # Case 3: Moved to Backlog (or no date)
+    if target_sprint_number == 'Backlog' or not target_end_date:
+        return 'Backlog'
+
+    return target_sprint_number
 
 def create_story(db: Session, user: User, story_in: Any, file_path: Optional[str] = None) -> UserStory:
     project_id = story_in.project_id
@@ -124,6 +206,15 @@ def create_story(db: Session, user: User, story_in: Any, file_path: Optional[str
             db.add(team)
             db.flush()
 
+    # [NEW] Check for shared end date grouping during creation
+    assigned_sprint = story_in.sprint_number
+    if story_in.end_date:
+        auto_sprint = _handle_sprint_auto_assignment(
+            db, project_id, story_in.end_date, None, assigned_sprint, user.id
+        )
+        if auto_sprint:
+            assigned_sprint = auto_sprint
+
     # Prepare data for repo using Factory method
     create_data = StoryRepoCreate.create_from_request(
         project_id=project_id,
@@ -135,8 +226,11 @@ def create_story(db: Session, user: User, story_in: Any, file_path: Optional[str
         file_path=file_path,
         team_id=team_id
     )
+    # Overwrite sprint if auto-assigned
+    create_dict = create_data.model_dump()
+    create_dict['sprint_number'] = assigned_sprint
     
-    new_story = create_story_record(db, create_data.model_dump())
+    new_story = create_story_record(db, create_dict)
     
     # Activity & Notification
     create_activity(db, new_story.id, user.id, StoryAction.CREATED.value, {"Status": {"old": "None", "new": story_in.status}})
@@ -178,10 +272,32 @@ def update_story(db: Session, user: User, story_id: int, story_in: Any) -> UserS
     final_end = updates.get('end_date', story.end_date)
     validate_dates(final_start, final_end)
 
+    # [NEW] Robust Sprint Auto-Assignment / Sync
+    # This ensures anytime a story is saved, we check if it should be in a sprint or backlog.
+    # It also handles syncing from date to sprint.
+    auto_sprint = _handle_sprint_auto_assignment(
+        db, story.project_id, final_end, story.id, updates.get('sprint_number', story.sprint_number), user.id
+    )
+    
+    # If a new sprint_number was determined, apply it
+    # AND, Case 2 special sync: if we only had sprint_number, we should ALSO sync the date back
+    if auto_sprint and auto_sprint != updates.get('sprint_number', story.sprint_number):
+        updates['sprint_number'] = auto_sprint
+    
+    # Bi-directional sync: If we have a sprint but no date, try to find the date
+    if not final_end and updates.get('sprint_number', story.sprint_number) and updates.get('sprint_number', story.sprint_number) != 'Backlog':
+        existing_sprint_date = db.query(UserStory.end_date).filter(
+            UserStory.project_id == story.project_id,
+            UserStory.sprint_number == updates.get('sprint_number', story.sprint_number),
+            UserStory.end_date.isnot(None)
+        ).first()
+        if existing_sprint_date:
+            updates['end_date'] = existing_sprint_date[0]
+
     for field, new_val in updates.items():
         if field == "parent_issue_id" and field in changes: 
-             setattr(story, field, new_val)
-             continue
+            setattr(story, field, new_val)
+            continue
              
         old_val = getattr(story, field, None)
         str_old = str(old_val) if old_val is not None else ""
