@@ -35,6 +35,11 @@ def create_project(
     if user.view_mode != ADMIN:
         raise_forbidden("Developers cannot create projects. Please switch to Admin Mode.")
 
+    # Check if project with same name already exists for THIS user
+    existing_project = db.query(Project).filter(Project.name == name, Project.owner_id == user.id).first()
+    if existing_project:
+        raise_bad_request("You already have a project with this name")
+
     try:
         # Any user in ADMIN mode can create projects
         project = Project(
@@ -49,7 +54,7 @@ def create_project(
         db.flush() # ensure ID is generated if needed, though refresh covers it? refresh needs flush if autocommit=False.
         db.refresh(project)
     except IntegrityError:
-        raise_bad_request("Project with this name already exists")
+        raise_bad_request("Project creation failed. This name or prefix might be in use.")
 
     return project
 
