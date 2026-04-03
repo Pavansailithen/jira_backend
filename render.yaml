@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: jira-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        sync: false
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        sync: false
+      - key: PROJECT_NAME
+        value: Jira-like Backend API
+      - key: PROJECT_VERSION
+        value: 1.0.0
