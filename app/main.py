@@ -24,7 +24,7 @@ app.add_exception_handler(BaseAPIException, base_api_exception_handler)
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ✅ Allow all origins for now, restrict after testing
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
