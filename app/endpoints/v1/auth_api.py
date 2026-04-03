@@ -81,29 +81,43 @@ def perform_login(email: str, password: str, db: Session):
     Validates credentials and generates an access token.
     Handles view mode logic for promoted admins.
     """
-    user = db.query(User).filter(User.email == email).first()
-    if not user or not verify_password(password, user.hashed_password):
-        raise_unauthorized(ErrorMessages.INVALID_CREDENTIALS)
-    
-    # Default view_mode based on role on fresh login
-    if not user.is_master_admin:
-        # If user is an ADMIN (promoted), default to ADMIN mode. Otherwise DEVELOPER.
-        user.view_mode = ADMIN if user.role == ADMIN else DEVELOPER
-        # db.commit() handled by dependency
-    
-    token = create_access_token({
-        "user_id": user.id,
-        "role": user.role
-    })
-    
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "role": user.role,
-        "view_mode": user.view_mode,
-        "is_master_admin": user.is_master_admin
-    }
+    logger.info(f"Attempting login for email: {email}")
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            logger.warning(f"Login failed: User not found for email {email}")
+            raise_unauthorized(ErrorMessages.INVALID_CREDENTIALS)
+        
+        logger.info(f"User found: {user.username} (ID: {user.id}). Verifying password...")
+        if not verify_password(password, user.hashed_password):
+            logger.warning(f"Login failed: Invalid password for email {email}")
+            raise_unauthorized(ErrorMessages.INVALID_CREDENTIALS)
+        
+        # Default view_mode based on role on fresh login
+        if not user.is_master_admin:
+            # If user is an ADMIN (promoted), default to ADMIN mode. Otherwise DEVELOPER.
+            user.view_mode = ADMIN if user.role == ADMIN else DEVELOPER
+            db.flush()
+            logger.info(f"View mode set to {user.view_mode} for user {user.username}")
+        
+        logger.info("Generating access token...")
+        token = create_access_token({
+            "user_id": user.id,
+            "role": user.role
+        })
+        
+        logger.info(f"Login successful for user: {user.username}")
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user_id": user.id,
+            "role": user.role,
+            "view_mode": user.view_mode,
+            "is_master_admin": user.is_master_admin
+        }
+    except Exception as e:
+        logger.error(f"Error during perform_login for {email}: {str(e)}")
+        raise
 
 @router.post("/login")
 def login(

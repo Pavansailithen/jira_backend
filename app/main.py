@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -20,6 +21,27 @@ app = FastAPI(
 )
  
 app.add_exception_handler(BaseAPIException, base_api_exception_handler)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Catches all unhandled exceptions, logs the traceback, and returns a JSON response.
+    This ensures that CORS headers are preserved even on server-side crashes (500 errors).
+    """
+    import traceback
+    error_traceback = traceback.format_exc()
+    logger.error(f"Unhandled Exception: {str(exc)}\n{error_traceback}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": "Internal Server Error",
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "path": request.url.path,
+            "details": str(exc) if os.getenv("DEBUG") == "true" else "An unexpected error occurred."
+        }
+    )
  
 # CORS Middleware
 app.add_middleware(
