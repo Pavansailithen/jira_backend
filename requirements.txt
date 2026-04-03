@@ -1,13 +1,12 @@
-﻿fastapi==0.115.8
+fastapi==0.115.8
 uvicorn==0.35.0
 pydantic[email]>=2.0.0
 SQLAlchemy==2.0.42
-PyMySQL==1.1.2
+psycopg2-binary==2.9.9
+asyncpg
 python-dotenv==1.1.1
 python-jose[cryptography]
 passlib[bcrypt]
 fastapi-mail>=1.4.1
 alembic
 python-multipart==0.0.20
-aiofiles>=23.2.1
-

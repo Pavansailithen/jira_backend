@@ -61,11 +61,9 @@ def apply_schema_updates():
         try:
             # Example update: Make project_name nullable in user_story table
             # Note: In production, consider using Alembic for migrations.
-            connection.execute(text("ALTER TABLE user_story MODIFY COLUMN project_name VARCHAR(255) NULL;"))
+            connection.execute(text("ALTER TABLE user_story ALTER COLUMN project_name TYPE VARCHAR(255), ALTER COLUMN project_name DROP NOT NULL;"))
             connection.commit()
             logger.info("Column project_name in table 'user_story' made nullable successfully.")
         except Exception as e:
             logger.error(f"Error applying schema updates: {e}")
             connection.rollback()
-
-
