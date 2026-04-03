@@ -61,36 +61,20 @@ def validate_lowercase_email(email: str):
     if email != email.lower():
         raise_bad_request("Email must be in lowercase")
 
-# ---------------- PASSWORD HASHING ---------------- #
-
 def hash_password(password: str) -> str:
     """
     Hashes a password using the configured context.
-    
-    Args:
-        password: The plain text password
-        
-    Returns:
-        str: The hashed password
+    Truncates to 72 chars to avoid bcrypt ValueErrors on newer environments.
     """
-    return pwd_context.hash(password)
+    return pwd_context.hash(password[:72])
 
 def verify_password(password: str, hashed_password: str) -> bool:
     """
     Verifies a plain password against a hash.
-    
-    Args:
-        password: The plain text password
-        hashed_password: The stored hash
-        
-    Returns:
-        bool: True if password matches, False otherwise
-        
-    Raises:
-        HTTPException: If hash in database is invalid/unknown
+    Truncates input to 72 chars to match bcrypt's internal limit.
     """
     try:
-        return pwd_context.verify(password, hashed_password)
+        return pwd_context.verify(password[:72], hashed_password)
     except UnknownHashError:
         # Database contains invalid hash
         raise_internal_error("Invalid password hash stored in database")
